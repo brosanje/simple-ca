@@ -21,14 +21,14 @@ opt_intermediate_dir_default=intermediate
 opt_days_default=365
 opt_years_default=1      ## default expiry for server certificates
 opt_private_key_cipher_default_if=aes256
-opt_country_default=CA
-opt_province_default=Ontario
-opt_city_default=Toronto
-opt_company_default=Fidiyo
-opt_fqdn_default=$RAILS_SERVER_HOST
-opt_department_default="$opt_company_default Certificate Authority"
-opt_root_common_name_default="$opt_company_default Root CA"
-opt_intermediate_common_name_default="$opt_company_default Intermediate CA"
+opt_country_default=
+opt_province_default=
+opt_city_default=
+opt_company_default=
+opt_fqdn_default=
+[ "$opt_company_default" ] && opt_department_default="$opt_company_default Certificate Authority"
+[ "$opt_company_default" ] && opt_root_common_name_default="$opt_company_default Root CA"
+[ "$opt_company_default" ] && opt_intermediate_common_name_default="$opt_company_default Intermediate CA"
 
 ###############
 (( twenty_years_of_days = 20 * 365 + 10 ))
@@ -94,26 +94,26 @@ Generate a self-signed certificate for a web server.
 simple-ca self-sign [Options] fully.qualified.server.domain.name
 
 Options
-  -bits NUMBER : number of bits in the key (default $opt_bits_default)
-  -days NUMBER : number of days to certificate expiry (default $opt_days_default)
+  -bits NUMBER : number of bits in the key (default ${opt_bits_default:-none})
+  -days NUMBER : number of days to certificate expiry (default ${opt_days_default:-none})
   -aes128 -aes192 -aes256 -camellia128 -camellia192 -camellia256
       -des -des3 -idea : type of encryption to use for the private keys.
       default is no encryption, no password.
   -nopassword : no password on the private keys.  this is the default.
-  -withpassword : encrypt the private keys, with $opt_private_key_cipher_default_if cipher.
+  -withpassword : encrypt the private keys, with ${opt_private_key_cipher_default_if:-none} cipher.
       aliases : -password, -encrypt-private-key
   -country COUNTRY : two letter ISO code for certificate authority country.
-      default is $opt_country_default.
+      default is ${opt_country_default:-none}.
   -province PROVINCE : province name for certificate authority.
-      default is $opt_province_default.
+      default is ${opt_province_default:-none}.
       alias : -state
   -city CITY : city for certificate authority.
-      default is $opt_city_default.
+      default is ${opt_city_default:-none}.
   -company COMPANY : name of certificate authority.
-      default is $opt_company_default.
+      default is ${opt_company_default:-none}.
       alias : -organization
   -department DEPARTMENT : department handling certs.
-      default is $opt_department_default.
+      default is ${opt_department_default:-none}.
       aliases are -section, -unit
   -email EMAIL : contact email
 EOF
@@ -126,26 +126,26 @@ Generate a request for a signed certificate for a web server.
 simple-ca request [Options] fully.qualified.server.domain.name
 
 Options
-  -bits NUMBER : number of bits in the key (default $opt_bits_default)
-  -days NUMBER : number of days to certificate expiry (default $opt_days_default)
+  -bits NUMBER : number of bits in the key (default ${opt_bits_default:-none})
+  -days NUMBER : number of days to certificate expiry (default ${opt_days_default:-none})
   -aes128 -aes192 -aes256 -camellia128 -camellia192 -camellia256
       -des -des3 -idea : type of encryption to use for the private keys.
       default is no encryption, no password.
   -nopassword : no password on the private keys.  this is the default.
-  -withpassword : encrypt the private keys, with $opt_private_key_cipher_default_if cipher.
+  -withpassword : encrypt the private keys, with ${opt_private_key_cipher_default_if:-none} cipher.
       aliases : -password, -encrypt-private-key
   -country COUNTRY : two letter ISO code for certificate authority country.
-      default is $opt_country_default.
+      default is ${opt_country_default:-none}.
   -province PROVINCE : province name for certificate authority.
-      default is $opt_province_default.
+      default is ${opt_province_default:-none}.
       alias : -state
   -city CITY : city for certificate authority.
-      default is $opt_city_default.
+      default is ${opt_city_default:-none}.
   -company COMPANY : name of certificate authority.
-      default is $opt_company_default.
+      default is ${opt_company_default:-none}.
       alias : -organization
   -department DEPARTMENT : department handling certs.
-      default is $opt_department_default.
+      default is ${opt_department_default:-none}.
       aliases are -section, -unit
   -email EMAIL : contact email
 EOF
@@ -169,29 +169,29 @@ Options
   -new-intermediate : create Intermediate CA as new.  if it exists, scrub it.
   -intermediate INTERMEDIATE-DIRECTORY : Intermediate CA to use.
     Optional name of directory within the CA directory to hold
-    the Intermediate CA data.  default is $opt_intermediate_dir_default.
-  -bits NUMBER : number of bits in the key (default $opt_bits_default)
+    the Intermediate CA data.  default is ${opt_intermediate_dir_default:-none}.
+  -bits NUMBER : number of bits in the key (default ${opt_bits_default:-none})
   -years NUMBER : default number of years to certificate
-      expiry (default $opt_years_default)
-  -days NUMBER : number of days to certificate expiry (default $opt_days_default)
+      expiry (default ${opt_years_default:-none})
+  -days NUMBER : number of days to certificate expiry (default ${opt_days_default:-none})
   -aes128 -aes192 -aes256 -camellia128 -camellia192 -camellia256
       -des -des3 -idea : type of encryption to use for the private keys.
       default is no encryption, no password.
   -nopassword : no password on the private keys.  this is the default.
-  -withpassword : encrypt the private keys, with $opt_private_key_cipher_default_if cipher.
+  -withpassword : encrypt the private keys, with ${opt_private_key_cipher_default_if:-none} cipher.
       aliases : -password, -encrypt-private-key
   -country COUNTRY : two letter ISO code for certificate authority country.
-      default is $opt_country_default.
+      default is ${opt_country_default:-none}.
   -province PROVINCE : province name for certificate authority.
-      default is $opt_province_default.
+      default is ${opt_province_default:-none}.
       alias : -state
   -city CITY : city for certificate authority.
-      default is $opt_city_default.
+      default is ${opt_city_default:-none}.
   -company COMPANY : name of certificate authority.
-      default is $opt_company_default.
+      default is ${opt_company_default:-none}.
       alias : -organization
   -department DEPARTMENT : department handling certs.
-      default is $opt_department_default.
+      default is ${opt_department_default:-none}.
       aliases are -section, -unit
   -email EMAIL : contact email
 EOF
@@ -213,36 +213,36 @@ There may be multiple intermediates for any given root certificate.
 
 IntermediateDirectory
   Optional name of directory within the CA directory to hold
-  the Intermediate CA data.  default is $opt_intermediate_dir_default.
+  the Intermediate CA data.  default is ${opt_intermediate_dir_default:-none}.
 
 IntermediateCommonName
   Optional common name for the Intermediate Certificate Authority.
-  default is $opt_intermediate_common_name_default.
+  default is ${{opt_intermediate_common_name_default:-none}.
 
 Options
   -new : create CA as new.  if CA exists, scrub it.
   -new-intermediate : create Intermediate CA as new.  if it exists, scrub it.
-  -bits NUMBER : number of bits in the key (default $opt_bits_default)
+  -bits NUMBER : number of bits in the key (default ${opt_bits_default:-none})
   -years NUMBER : default number of years to certificate
-      expiry (default $opt_years_default)
+      expiry (default ${opt_years_default:-none})
   -aes128 -aes192 -aes256 -camellia128 -camellia192 -camellia256
       -des -des3 -idea : type of encryption to use for the private keys.
       default is no encryption, no password.
   -nopassword : no password on the private keys.  this is the default.
-  -withpassword : encrypt the private keys, with $opt_private_key_cipher_default_if cipher.
+  -withpassword : encrypt the private keys, with ${opt_private_key_cipher_default_if:-none} cipher.
       aliases : -password, -encrypt-private-key
   -country COUNTRY : two letter ISO code for certificate authority country.
-      default is $opt_country_default.
+      default is $opt_country_default:-none}.
   -province PROVINCE : province name for certificate authority.
-      default is $opt_province_default.
+      default is $opt_province_default:-none}.
       alias : -state
   -city CITY : city for certificate authority.
-      default is $opt_city_default.
+      default is $opt_city_default:-none}.
   -company COMPANY : name of certificate authority.
-      default is $opt_company_default.
+      default is $opt_company_default:-none}.
       alias : -organization
   -department DEPARTMENT : department handling certs.
-      default is $opt_department_default.
+      default is $opt_department_default:-none}.
       aliases are -section, -unit
   -email EMAIL : contact email
 EOF
@@ -375,9 +375,13 @@ esac
 [ ".$opt_bits" = "." ] && opt_bits=$opt_bits_default
 [ ".$opt_years" = "." ] && opt_years=$opt_years_default
 [ ".$opt_days" = "." ] && opt_days=$opt_days_default
+
 [ ".$opt_country" = "." ] && opt_country=$opt_country_default
+[ ".$opt_country" = "." ] && prompt_opt -r opt_country Country 2 letter ISO code
 [ ".$opt_province" = "." ] && opt_province=$opt_province_default
+[ ".$opt_province" = "." ] && prompt_opt opt_province Full Province or State name
 [ ".$opt_city" = "." ] && opt_city=$opt_city_default
+[ ".$opt_city" = "." ] && prompt_opt opt_city City name
 [ ".$opt_company" = "." ] && prompt_opt -d "$opt_company_default" opt_company Organization or Company Name
 [ ".$opt_department" = "." ] && opt_department="$opt_company Certificate Authority"
 [ ".$opt_root_common_name" = "." ] && opt_root_common_name="$opt_company Root CA"
