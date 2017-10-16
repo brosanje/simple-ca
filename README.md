@@ -1,5 +1,5 @@
 # simple-ca
-'''
+```
 Simple Certificate Authority, Root CA, Intermediate CA, self-signed and self-trusted.
 
 Generate SSL certificates.
@@ -166,4 +166,4 @@ Options
       aliases are -section, -unit
   -email EMAIL : contact email
 
-'''
+```
