@@ -312,7 +312,14 @@ self-sign|request)
   ;;
 
 trust)
-  opt_fqdn=$1; shift
+  if [ -f "$1" ]; then
+    opt_certificate_signing_request_file=$(readlink -f "$1")
+    opt_fqdn=$(openssl req -text -noout -verify -in "$opt_certificate_signing_request_file" 2> /dev/null | grep Subject: | sed -e 's/^.*CN=//' -e 's/\/.*$//')
+  else
+    opt_fqdn="$1"
+  fi
+  shift
+
   [ -z "$opt_fqdn" ] && prompt_opt -d "$opt_fqdn_default" opt_fqdn "Fully Qualified Domain Name for your Web Server"
   [ -z "$opt_intermediate_dir" ] && prompt_opt -d "$opt_intermediate_dir_default" opt_intermediate_dir "Intermediate CA directory name"
   ;;
@@ -864,32 +871,36 @@ popd > /dev/null
 if [ ".$COMMAND" = .trust ]; then
   pushd "$SSLCADIR/$opt_intermediate_dir" > /dev/null
 
-  if [ ".$opt_private_key_cipher" = . ]; then
-    (( promptnum = promptnum + 1 ))
-    echo ""
-    echo "$promptnum) Generate $opt_bits bit private key (unencrypted)"
-    $ECHO openssl genrsa -out "private/${opt_fqdn}.key.pem" $opt_bits
+  if [ "$opt_certificate_signing_request_file" ]; then
+    $ECHO cp "$opt_certificate_signing_request_file" "csr/${opt_fqdn}.csr.pem"
   else
+    if [ ".$opt_private_key_cipher" = . ]; then
+      (( promptnum = promptnum + 1 ))
+      echo ""
+      echo "$promptnum) Generate $opt_bits bit private key (unencrypted)"
+      $ECHO openssl genrsa -out "private/${opt_fqdn}.key.pem" $opt_bits
+    else
+      (( promptnum = promptnum + 1 ))
+      echo ""
+      echo "$promptnum) Generate encrypted $opt_bits bit private key (encryption password will be prompted for)"
+      $ECHO openssl genrsa $opt_private_key_cipher -out "private/${opt_fqdn}.key.pem" $opt_bits
+    fi
+    $ECHO chmod 700 "private/${opt_fqdn}.key.pem"
+
     (( promptnum = promptnum + 1 ))
     echo ""
-    echo "$promptnum) Generate encrypted $opt_bits bit private key (encryption password will be prompted for)"
-    $ECHO openssl genrsa $opt_private_key_cipher -out "private/${opt_fqdn}.key.pem" $opt_bits
+    echo "$prompnum) generate the certificate signing request (csr) for $opt_days days using"
+    echo "   Country Name (2 letter code)           : $opt_country"
+    echo "   State or Province Name (full name)     : $opt_province"
+    echo "   Locality Name (eg, city)               : $opt_city"
+    echo "   Organization Name (eg, company)        : $opt_company"
+    echo "   Organizational Unit Name (eg, section) : $opt_department"
+    echo "   Web Server Fully Qualified Domain Name : $opt_fqdn"
+    echo "   Email Address                          : $opt_email"
+
+    [ ".$opt_private_key_cipher" != . ] && { echo ""; echo "$opt_fqdn private key password will be prompted for ..."; }
+    $ECHO openssl req -config openssl.cnf -key "private/${opt_fqdn}.key.pem" -new -sha256 -out "csr/${opt_fqdn}.csr.pem" -days $opt_days -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_fqdn/emailAddress=$opt_email"
   fi
-  $ECHO chmod 700 "private/${opt_fqdn}.key.pem"
-
-  (( promptnum = promptnum + 1 ))
-  echo ""
-  echo "$prompnum) generate the certificate signing request (csr) for $opt_days days using"
-  echo "   Country Name (2 letter code)           : $opt_country"
-  echo "   State or Province Name (full name)     : $opt_province"
-  echo "   Locality Name (eg, city)               : $opt_city"
-  echo "   Organization Name (eg, company)        : $opt_company"
-  echo "   Organizational Unit Name (eg, section) : $opt_department"
-  echo "   Web Server Fully Qualified Domain Name : $opt_fqdn"
-  echo "   Email Address                          : $opt_email"
-
-  [ ".$opt_private_key_cipher" != . ] && { echo ""; echo "$opt_fqdn private key password will be prompted for ..."; }
-  $ECHO openssl req -config openssl.cnf -key "private/${opt_fqdn}.key.pem" -new -sha256 -out "csr/${opt_fqdn}.csr.pem" -days $opt_days -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_fqdn/emailAddress=$opt_email"
 
   (( promptnum = promptnum + 1 ))
   echo ""
@@ -926,7 +937,8 @@ fi
 
 if [ "$created_server_cert" ]; then
   echo ""
-  echo "private key ${SSLCADIR}/$opt_intermediate_dir/private/${opt_fqdn}.key.pem"
+  [ "$opt_certificate_signing_request_file" ] ||
+    echo "private key ${SSLCADIR}/$opt_intermediate_dir/private/${opt_fqdn}.key.pem"
   echo "public key cert ${SSLCADIR}/$opt_intermediate_dir/certs/${opt_fqdn}.cert.pem"
   echo "certificate chain ${SSLCADIR}/$opt_intermediate_dir/certs/ca-chain.cert.pem"
 fi
