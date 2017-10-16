@@ -1,18 +1,16 @@
 # simple-ca
+'''
 Simple Certificate Authority, Root CA, Intermediate CA, self-signed and self-trusted.
 
 Generate SSL certificates.
 
-simple-ca COMMAND \[ Options \] \[ Arguments \]
+simple-ca COMMAND [ Options ] [ Arguments ]
 
 COMMAND may be
 
   self-sign - generate a self-signed certificate, with corresponding private key.
-
   create - create a certificate authority for signing server certs.
-
   trust - generate the trusted server certificate.
-
   request - generate a CSR certificate signing request.
 
 Generate a self-signed certificate for a web server.
@@ -23,46 +21,26 @@ simple-ca self-sign [Options] fully.qualified.server.domain.name
 
 Options
   -bits NUMBER : number of bits in the key (default $opt_bits_default)
-
   -days NUMBER : number of days to certificate expiry (default $opt_days_default)
-
   -aes128 -aes192 -aes256 -camellia128 -camellia192 -camellia256
       -des -des3 -idea : type of encryption to use for the private keys.
-
       default is no encryption, no password.
-
   -nopassword : no password on the private keys.  this is the default.
-
   -withpassword : encrypt the private keys, with $opt_private_key_cipher_default_if cipher.
-
       aliases : -password, -encrypt-private-key
-
   -country COUNTRY : two letter ISO code for certificate authority country.
-
       default is $opt_country_default.
-
   -province PROVINCE : province name for certificate authority.
-
       default is $opt_province_default.
-
       alias : -state
-
   -city CITY : city for certificate authority.
-
       default is $opt_city_default.
-
   -company COMPANY : name of certificate authority.
-
       default is $opt_company_default.
-
       alias : -organization
-
   -department DEPARTMENT : department handling certs.
-
       default is $opt_department_default.
-
       aliases are -section, -unit
-
   -email EMAIL : contact email
 
 ========================================================
@@ -188,3 +166,4 @@ Options
       aliases are -section, -unit
   -email EMAIL : contact email
 
+'''
