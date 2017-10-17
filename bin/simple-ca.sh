@@ -14,6 +14,7 @@ ${TraceF-}
 : ${SSLCADIR:=$SSLDIR/certificate-authority}
 : ${SSLFILE:=server}
 : ${SSLCAFILE:=ca}
+: ${APACHE_RUN_GROUP:=www-data} ## see /etc/apache2/envvars
 
 opt_ca_bits_default=4096 ## bits for the CA certificate - should be more than "normal"
 opt_bits_default=2048    ## default # bits for server certificates
@@ -87,6 +88,15 @@ usage() {
   [ -n "$message" ] && echo "$message"
 
 case "$COMMAND" in
+verify)
+  cat <<EOF
+Show info for the named certificate.
+
+simple-ca verify path-to-certificate-file
+
+EOF
+  ;;
+
 self-sign)
   cat <<EOF
 Generate a self-signed certificate for a web server.
@@ -259,7 +269,9 @@ COMMAND may be
   self-sign - generate a self-signed certificate, with corresponding private key.
   create - create a certificate authority for signing server certs.
   trust - generate the trusted server certificate.
+  verify - display info on a named certificate.
   request - generate a CSR certificate signing request.
+  help - show help
 
 EOF
   ;;
@@ -273,6 +285,8 @@ self-sign) COMMAND=self-sign; shift ;;
 create) COMMAND=create; shift ;;
 trust) COMMAND=trust; shift ;;
 request) COMMAND=request; shift ;;
+verify) COMMAND=verify; shift ;;
+help) COMMAND=$2; usage -exit 0 "Help" ;;
 *) usage -exit 1 "Invalid command $1" >&2 ;;
 esac
 
@@ -304,6 +318,10 @@ done
 promptnum=0
 
 case "$COMMAND" in
+verify)
+  opt_certificate_signing_request_file=$(readlink -f "$1")
+  ;;
+
 self-sign|request)
   [ -d "$SSLDIR" ] || mkdir -p "$SSLDIR"
 
@@ -371,21 +389,23 @@ trust|create)
   ;;
 esac
 
-[ ".$opt_ca_bits" = "." ] && opt_ca_bits=$opt_ca_bits_default
-[ ".$opt_bits" = "." ] && opt_bits=$opt_bits_default
-[ ".$opt_years" = "." ] && opt_years=$opt_years_default
-[ ".$opt_days" = "." ] && opt_days=$opt_days_default
+if [ ".$COMMAND" != .verify ]; then
+  [ ".$opt_ca_bits" = "." ] && opt_ca_bits=$opt_ca_bits_default
+  [ ".$opt_bits" = "." ] && opt_bits=$opt_bits_default
+  [ ".$opt_years" = "." ] && opt_years=$opt_years_default
+  [ ".$opt_days" = "." ] && opt_days=$opt_days_default
 
-[ ".$opt_country" = "." ] && opt_country=$opt_country_default
-[ ".$opt_country" = "." ] && prompt_opt -r opt_country Country 2 letter ISO code
-[ ".$opt_province" = "." ] && opt_province=$opt_province_default
-[ ".$opt_province" = "." ] && prompt_opt opt_province Full Province or State name
-[ ".$opt_city" = "." ] && opt_city=$opt_city_default
-[ ".$opt_city" = "." ] && prompt_opt opt_city City name
-[ ".$opt_company" = "." ] && prompt_opt -d "$opt_company_default" opt_company Organization or Company Name
-[ ".$opt_department" = "." ] && opt_department="$opt_company Certificate Authority"
-[ ".$opt_root_common_name" = "." ] && opt_root_common_name="$opt_company Root CA"
-[ ".$opt_email" = "." ] && prompt_opt -r -d "$opt_email_default" opt_email Email Address
+  [ ".$opt_country" = "." ] && opt_country=$opt_country_default
+  [ ".$opt_country" = "." ] && prompt_opt -r opt_country Country 2 letter ISO code
+  [ ".$opt_province" = "." ] && opt_province=$opt_province_default
+  [ ".$opt_province" = "." ] && prompt_opt opt_province Full Province or State name
+  [ ".$opt_city" = "." ] && opt_city=$opt_city_default
+  [ ".$opt_city" = "." ] && prompt_opt opt_city City name
+  [ ".$opt_company" = "." ] && prompt_opt -d "$opt_company_default" opt_company Organization or Company Name
+  [ ".$opt_department" = "." ] && opt_department="$opt_company Certificate Authority"
+  [ ".$opt_root_common_name" = "." ] && opt_root_common_name="$opt_company Root CA"
+  [ ".$opt_email" = "." ] && prompt_opt -r -d "$opt_email_default" opt_email Email Address
+fi
 
 case "$COMMAND" in
 self-sign)
@@ -400,7 +420,8 @@ self-sign)
     echo "$promptnum) Generate encrypted $opt_bits bit private key (encryption password will be prompted for)"
     $ECHO openssl genrsa $opt_private_key_cipher -out "${SSLDIR}/${SSLFILE}.key.pem" $opt_bits
   fi
-  $ECHO chmod 700 "${SSLDIR}/${SSLFILE}.key.pem"
+  $ECHO chmod 440 "${SSLDIR}/${SSLFILE}.key.pem"
+  [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} "${SSLDIR}/${SSLFILE}.key.pem"
 
   (( promptnum = promptnum + 1 ))
   echo ""
@@ -438,6 +459,11 @@ self-sign)
   exit 0
   ;;
 
+verify)
+  $ECHO openssl x509 -noout -text -in "$opt_certificate_signing_request_file"
+  exit $?
+  ;;
+
 request)
   if [ ".$opt_private_key_cipher" = . ]; then
     (( promptnum = promptnum + 1 ))
@@ -450,7 +476,8 @@ request)
     echo "$promptnum) Generate encrypted $opt_bits bit private key (encryption password will be prompted for)"
     $ECHO openssl genrsa $opt_private_key_cipher -out "${SSLDIR}/${opt_fqdn}.key.pem" $opt_bits
   fi
-  $ECHO chmod 700 "${SSLDIR}/${opt_fqdn}.key.pem"
+  $ECHO chmod 440 "${SSLDIR}/${opt_fqdn}.key.pem"
+  [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} "${SSLDIR}/${opt_fqdn}.key.pem"
 
   (( promptnum = promptnum + 1 ))
   echo ""
@@ -635,7 +662,8 @@ EOF
     echo "$promptnum) Generate encrypted $opt_ca_bits bit root certificate authority private key (encryption password will be prompted for)"
     $ECHO openssl genrsa $opt_private_key_cipher -out "private/${SSLCAFILE}.key.pem" $opt_ca_bits
   fi
-  $ECHO chmod 400 "private/${SSLCAFILE}.key.pem"
+  $ECHO chmod 440 "private/${SSLCAFILE}.key.pem"
+  [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} "private/${SSLCAFILE}.key.pem"
 
   (( promptnum = promptnum + 1 ))
   echo ""
@@ -829,7 +857,8 @@ EOF
     echo "$promptnum) Generate encrypted $opt_ca_bits bit intermediate certificate private key (a new encryption password will be prompted for)"
     $ECHO openssl genrsa $opt_private_key_cipher -out private/intermediate.key.pem $opt_ca_bits
   fi
-  $ECHO chmod 400 private/intermediate.key.pem
+  $ECHO chmod 440 private/intermediate.key.pem
+  [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} private/intermediate.key.pem
 
   (( promptnum = promptnum + 1 ))
   echo ""
@@ -889,7 +918,8 @@ if [ ".$COMMAND" = .trust ]; then
       echo "$promptnum) Generate encrypted $opt_bits bit private key (encryption password will be prompted for)"
       $ECHO openssl genrsa $opt_private_key_cipher -out "private/${opt_fqdn}.key.pem" $opt_bits
     fi
-    $ECHO chmod 700 "private/${opt_fqdn}.key.pem"
+    $ECHO chmod 440 "private/${opt_fqdn}.key.pem"
+    [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} "private/${opt_fqdn}.key.pem"
 
     (( promptnum = promptnum + 1 ))
     echo ""
