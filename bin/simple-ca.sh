@@ -7,6 +7,8 @@ ${TraceF-}
 # create
 # trust
 # request
+# verify
+# help
 
 ###############
 ## defaults
@@ -32,6 +34,7 @@ opt_fqdn_default=
 [ "$opt_company_default" ] && opt_intermediate_common_name_default="$opt_company_default Intermediate CA"
 
 ###############
+## constants
 (( twenty_years_of_days = 20 * 365 + 10 ))
 
 ###############
@@ -71,6 +74,8 @@ set_ca_default() {
   eval "$var='$(grep "$key" openssl.cnf | sed -e 's/^.* = //')'"
 }
 
+###############
+## usage
 usage() {
   local exitcode message
 
@@ -280,6 +285,11 @@ esac
   [ -n "$exitcode" ] && exit $exitcode
 }
 
+###############
+## main
+
+#######################################
+## parse command line
 case "$1" in
 self-sign) COMMAND=self-sign; shift ;;
 create) COMMAND=create; shift ;;
@@ -315,8 +325,8 @@ do
   esac
 done
 
-promptnum=0
-
+#######################################
+## prompt for missing info
 case "$COMMAND" in
 verify)
   opt_certificate_signing_request_file=$(readlink -f "$1")
@@ -348,6 +358,8 @@ create)
   ;;
 esac
 
+#######################################
+## prepare
 case "$COMMAND" in
 trust|create)
   newcaflag=
@@ -389,6 +401,8 @@ trust|create)
   ;;
 esac
 
+#######################################
+## prompt for missing info
 if [ ".$COMMAND" != .verify ]; then
   [ ".$opt_ca_bits" = "." ] && opt_ca_bits=$opt_ca_bits_default
   [ ".$opt_bits" = "." ] && opt_bits=$opt_bits_default
@@ -407,25 +421,29 @@ if [ ".$COMMAND" != .verify ]; then
   [ ".$opt_email" = "." ] && prompt_opt -r -d "$opt_email_default" opt_email Email Address
 fi
 
+stagenum=0
+
+#######################################
+## execute
 case "$COMMAND" in
 self-sign)
   if [ ".$opt_private_key_cipher" = . ]; then
-    (( promptnum = promptnum + 1 ))
+    (( stagenum = stagenum + 1 ))
     echo ""
-    echo "$promptnum) Generate $opt_bits bit private key (unencrypted)"
+    echo "$stagenum) Generate $opt_bits bit private key (unencrypted)"
     $ECHO openssl genrsa -out "${SSLDIR}/${SSLFILE}.key.pem" $opt_bits
   else
-    (( promptnum = promptnum + 1 ))
+    (( stagenum = stagenum + 1 ))
     echo ""
-    echo "$promptnum) Generate encrypted $opt_bits bit private key (encryption password will be prompted for)"
+    echo "$stagenum) Generate encrypted $opt_bits bit private key (encryption password will be prompted for)"
     $ECHO openssl genrsa $opt_private_key_cipher -out "${SSLDIR}/${SSLFILE}.key.pem" $opt_bits
   fi
   $ECHO chmod 440 "${SSLDIR}/${SSLFILE}.key.pem"
   [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} "${SSLDIR}/${SSLFILE}.key.pem"
 
-  (( promptnum = promptnum + 1 ))
+  (( stagenum = stagenum + 1 ))
   echo ""
-  echo "$promptnum) generate the certificate signing request (csr) for $opt_days days using"
+  echo "$stagenum) generate the certificate signing request (csr) for $opt_days days using"
   echo "   Country Name (2 letter code)           : $opt_country"
   echo "   State or Province Name (full name)     : $opt_province"
   echo "   Locality Name (eg, city)               : $opt_city"
@@ -437,15 +455,15 @@ self-sign)
   [ ".$opt_private_key_cipher" != . ] && { echo ""; echo "private key password will be prompted for ..."; }
   $ECHO openssl req -new -key "${SSLDIR}/${SSLFILE}.key.pem" -out "${SSLDIR}/${SSLFILE}.csr.pem" -days $opt_days -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_fqdn/emailAddress=$opt_email"
 
-  (( promptnum = promptnum + 1 ))
+  (( stagenum = stagenum + 1 ))
   echo ""
-  echo "$promptnum) generate self signed ssl certificate for $opt_days days"
+  echo "$stagenum) generate self signed ssl certificate for $opt_days days"
   $ECHO openssl x509 -req -days $opt_days -in "${SSLDIR}/${SSLFILE}.csr.pem" -signkey "${SSLDIR}/${SSLFILE}.key.pem" -out "${SSLDIR}/${SSLFILE}.cert.pem"
   $ECHO chmod 444 "${SSLDIR}/${SSLFILE}.cert.pem"
 
-  (( promptnum = promptnum + 1 ))
+  (( stagenum = stagenum + 1 ))
   echo ""
-  echo "$promptnum) verify certificate"
+  echo "$stagenum) verify certificate"
   $ECHO openssl x509 -noout -text -in "${SSLDIR}/${SSLFILE}.cert.pem"
 
   echo ""
@@ -466,20 +484,20 @@ verify)
 
 request)
   if [ ".$opt_private_key_cipher" = . ]; then
-    (( promptnum = promptnum + 1 ))
+    (( stagenum = stagenum + 1 ))
     echo ""
-    echo "$promptnum) Generate $opt_bits bit private key (unencrypted)"
+    echo "$stagenum) Generate $opt_bits bit private key (unencrypted)"
     $ECHO openssl genrsa -out "${SSLDIR}/${opt_fqdn}.key.pem" $opt_bits
   else
-    (( promptnum = promptnum + 1 ))
+    (( stagenum = stagenum + 1 ))
     echo ""
-    echo "$promptnum) Generate encrypted $opt_bits bit private key (encryption password will be prompted for)"
+    echo "$stagenum) Generate encrypted $opt_bits bit private key (encryption password will be prompted for)"
     $ECHO openssl genrsa $opt_private_key_cipher -out "${SSLDIR}/${opt_fqdn}.key.pem" $opt_bits
   fi
   $ECHO chmod 440 "${SSLDIR}/${opt_fqdn}.key.pem"
   [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} "${SSLDIR}/${opt_fqdn}.key.pem"
 
-  (( promptnum = promptnum + 1 ))
+  (( stagenum = stagenum + 1 ))
   echo ""
   echo "$prompnum) generate the certificate signing request (csr) for $opt_days days using"
   echo "   Country Name (2 letter code)           : $opt_country"
@@ -652,22 +670,22 @@ if [ -n "$newcaflag" -o -n "$opt_scrub_root_ca" ]; then
 EOF
 
   if [ ".$opt_private_key_cipher" = . ]; then
-    (( promptnum = promptnum + 1 ))
+    (( stagenum = stagenum + 1 ))
     echo ""
-    echo "$promptnum) Generate $opt_ca_bits bit root certificate authority private key (unencrypted)"
+    echo "$stagenum) Generate $opt_ca_bits bit root certificate authority private key (unencrypted)"
     $ECHO openssl genrsa -out "private/${SSLCAFILE}.key.pem" $opt_ca_bits
   else
-    (( promptnum = promptnum + 1 ))
+    (( stagenum = stagenum + 1 ))
     echo ""
-    echo "$promptnum) Generate encrypted $opt_ca_bits bit root certificate authority private key (encryption password will be prompted for)"
+    echo "$stagenum) Generate encrypted $opt_ca_bits bit root certificate authority private key (encryption password will be prompted for)"
     $ECHO openssl genrsa $opt_private_key_cipher -out "private/${SSLCAFILE}.key.pem" $opt_ca_bits
   fi
   $ECHO chmod 440 "private/${SSLCAFILE}.key.pem"
   [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} "private/${SSLCAFILE}.key.pem"
 
-  (( promptnum = promptnum + 1 ))
+  (( stagenum = stagenum + 1 ))
   echo ""
-  echo "$promptnum) generate the root certificate with expiry in 20 years ($twenty_years_of_days days) using"
+  echo "$stagenum) generate the root certificate with expiry in 20 years ($twenty_years_of_days days) using"
   echo "   Country Name (2 letter code)           : $opt_country"
   echo "   State or Province Name (full name)     : $opt_province"
   echo "   Locality Name (eg, city)               : $opt_city"
@@ -680,9 +698,9 @@ EOF
   $ECHO openssl req -config openssl.cnf -key "private/${SSLCAFILE}.key.pem" -new -x509 -days $twenty_years_of_days -sha256 -extensions v3_ca -out "certs/${SSLCAFILE}.cert.pem" -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_root_common_name/emailAddress=$opt_email"
   $ECHO chmod 444 "certs/${SSLCAFILE}.cert.pem"
 
-  (( promptnum = promptnum + 1 ))
+  (( stagenum = stagenum + 1 ))
   echo ""
-  echo "$promptnum) verify root certificate"
+  echo "$stagenum) verify root certificate"
   $ECHO openssl x509 -noout -text -in "certs/${SSLCAFILE}.cert.pem"
 
   created_root_ca=yes
@@ -701,9 +719,9 @@ do
 done
 
 if [ -n "$newintcaflag" -o -n "$opt_scrub_intermediate_ca" ]; then
-  (( promptnum = promptnum + 1 ))
+  (( stagenum = stagenum + 1 ))
   echo ""
-  echo "$promptnum) generate Intermediate CA certificate"
+  echo "$stagenum) generate Intermediate CA certificate"
 
   pushd "$opt_intermediate_dir" > /dev/null
   
@@ -847,22 +865,22 @@ if [ -n "$newintcaflag" -o -n "$opt_scrub_intermediate_ca" ]; then
 EOF
 
   if [ ".$opt_private_key_cipher" = . ]; then
-    (( promptnum = promptnum + 1 ))
+    (( stagenum = stagenum + 1 ))
     echo ""
-    echo "$promptnum) generate $opt_ca_bits intermediate certificate private key for the certificate authority"
+    echo "$stagenum) generate $opt_ca_bits intermediate certificate private key for the certificate authority"
     $ECHO openssl genrsa -out private/intermediate.key.pem $opt_ca_bits
   else
-    (( promptnum = promptnum + 1 ))
+    (( stagenum = stagenum + 1 ))
     echo ""
-    echo "$promptnum) Generate encrypted $opt_ca_bits bit intermediate certificate private key (a new encryption password will be prompted for)"
+    echo "$stagenum) Generate encrypted $opt_ca_bits bit intermediate certificate private key (a new encryption password will be prompted for)"
     $ECHO openssl genrsa $opt_private_key_cipher -out private/intermediate.key.pem $opt_ca_bits
   fi
   $ECHO chmod 440 private/intermediate.key.pem
   [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} private/intermediate.key.pem
 
-  (( promptnum = promptnum + 1 ))
+  (( stagenum = stagenum + 1 ))
   echo ""
-  echo "$promptnum) generate certificate signing request for the intermediate certificate for the certificate authority"
+  echo "$stagenum) generate certificate signing request for the intermediate certificate for the certificate authority"
   echo "   Country Name (2 letter code)           : $opt_country"
   echo "   State or Province Name (full name)     : $opt_province"
   echo "   Locality Name (eg, city)               : $opt_city"
@@ -875,21 +893,21 @@ EOF
 
   $ECHO openssl req -config openssl.cnf -new -sha256 -key "$opt_intermediate_dir/private/intermediate.key.pem" -out "$opt_intermediate_dir/csr/intermediate.csr.pem" -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_intermediate_common_name/emailAddress=$opt_email"
 
-  (( promptnum = promptnum + 1 ))
+  (( stagenum = stagenum + 1 ))
   echo ""
-  echo "$promptnum) generate intermediate certificate signed by the root certificate authority"
+  echo "$stagenum) generate intermediate certificate signed by the root certificate authority"
   [ ".$opt_private_key_cipher" != . ] && { echo ""; echo "the root certificate private key password will be prompted for ..."; }
   $ECHO openssl ca -config openssl.cnf -extensions v3_intermediate_ca -days $twenty_years_of_days -notext -md sha256 -in "$opt_intermediate_dir/csr/intermediate.csr.pem" -out "$opt_intermediate_dir/certs/intermediate.cert.pem"
   $ECHO chmod 444 "$opt_intermediate_dir/certs/intermediate.cert.pem"
 
-  (( promptnum = promptnum + 1 ))
+  (( stagenum = stagenum + 1 ))
   echo ""
-  echo "$promptnum) verify intermediate certificate"
+  echo "$stagenum) verify intermediate certificate"
   $ECHO openssl x509 -noout -text -in "$opt_intermediate_dir/certs/intermediate.cert.pem"
 
-  (( promptnum = promptnum + 1 ))
+  (( stagenum = stagenum + 1 ))
   echo ""
-  echo "$promptnum) create the certificate chain"
+  echo "$stagenum) create the certificate chain"
   cat "$opt_intermediate_dir/certs/intermediate.cert.pem" "certs/${SSLCAFILE}.cert.pem" > "$opt_intermediate_dir/certs/ca-chain.cert.pem"
   $ECHO chmod 444 "$opt_intermediate_dir/certs/ca-chain.cert.pem"
 
@@ -908,20 +926,20 @@ if [ ".$COMMAND" = .trust ]; then
     $ECHO cp "$opt_certificate_signing_request_file" "csr/${opt_fqdn}.csr.pem"
   else
     if [ ".$opt_private_key_cipher" = . ]; then
-      (( promptnum = promptnum + 1 ))
+      (( stagenum = stagenum + 1 ))
       echo ""
-      echo "$promptnum) Generate $opt_bits bit private key (unencrypted)"
+      echo "$stagenum) Generate $opt_bits bit private key (unencrypted)"
       $ECHO openssl genrsa -out "private/${opt_fqdn}.key.pem" $opt_bits
     else
-      (( promptnum = promptnum + 1 ))
+      (( stagenum = stagenum + 1 ))
       echo ""
-      echo "$promptnum) Generate encrypted $opt_bits bit private key (encryption password will be prompted for)"
+      echo "$stagenum) Generate encrypted $opt_bits bit private key (encryption password will be prompted for)"
       $ECHO openssl genrsa $opt_private_key_cipher -out "private/${opt_fqdn}.key.pem" $opt_bits
     fi
     $ECHO chmod 440 "private/${opt_fqdn}.key.pem"
     [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} "private/${opt_fqdn}.key.pem"
 
-    (( promptnum = promptnum + 1 ))
+    (( stagenum = stagenum + 1 ))
     echo ""
     echo "$prompnum) generate the certificate signing request (csr) for $opt_days days using"
     echo "   Country Name (2 letter code)           : $opt_country"
@@ -936,15 +954,15 @@ if [ ".$COMMAND" = .trust ]; then
     $ECHO openssl req -config openssl.cnf -key "private/${opt_fqdn}.key.pem" -new -sha256 -out "csr/${opt_fqdn}.csr.pem" -days $opt_days -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_fqdn/emailAddress=$opt_email"
   fi
 
-  (( promptnum = promptnum + 1 ))
+  (( stagenum = stagenum + 1 ))
   echo ""
-  echo "$promptnum) generate CA signed ssl certificate for $opt_days days"
+  echo "$stagenum) generate CA signed ssl certificate for $opt_days days"
   $ECHO openssl ca -config openssl.cnf -extensions server_cert -days $opt_days -notext -md sha256 -in "csr/${opt_fqdn}.csr.pem" -out "certs/${opt_fqdn}.cert.pem" 
   $ECHO chmod 444 "certs/${opt_fqdn}.cert.pem" 
 
-  (( promptnum = promptnum + 1 ))
+  (( stagenum = stagenum + 1 ))
   echo ""
-  echo "$promptnum) verify web server certificate"
+  echo "$stagenum) verify web server certificate"
   $ECHO openssl x509 -noout -text -in "certs/${opt_fqdn}.cert.pem"
 
   echo ""
