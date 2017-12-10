@@ -74,6 +74,65 @@ set_ca_default() {
   eval "$var='$(grep "$key" openssl.cnf | sed -e 's/^.* = //')'"
 }
 
+cleanup_sh() {
+	${TraceF:-:}
+	typeset fn objtype objname deleted=
+	
+	runshcmd rm -f "${TMP:-nonexistantfile}"*
+	
+	for fn in $CLEANUP
+	do
+		case "$deleted" in
+		*,"$fn",*|*,"$fn"|"$fn",*) continue ;;
+		esac
+		
+    runshcmd rm -f "$fn"
+		
+		deleted="${deleted}${deleted:+,}$fn"
+	done
+}
+
+runshcmd() {
+  [ -n "${TraceF-}" ] && ${TraceF-}
+  typeset input output ec=0
+  
+  if [ ".$1" = ".-o" ]; then
+    output="$2"
+    shift
+    shift
+    if [ ."${ECHO-}" = .echo ]; then
+      echo "$* > $output" >&2
+    elif [ ."${ECHO-}" = .trace ]; then
+      echo "$* > $output" >&2
+      "$@" > "$output"; ec=$?
+    else
+      "$@" > "$output"; ec=$?
+    fi
+  elif [ ".$1" = ".-i" ]; then
+    input="$2"
+    shift
+    shift
+    if [ ."${ECHO-}" = .echo ]; then
+      echo "$* < $input" >&2
+    elif [ ."${ECHO-}" = .trace ]; then
+      echo "$* < $input" >&2
+      "$@" < "$input"; ec=$?
+    else
+      "$@" < "$input"; ec=$?
+    fi
+  else
+    if [ ."${ECHO-}" = .echo ]; then
+      echo "$*" >&2
+    elif [ ."${ECHO-}" = .trace ]; then
+      echo "$*" >&2
+      "$@"; ec=$?
+    else
+      "$@"; ec=$?
+    fi
+  fi
+  return $ec
+}
+
 ###############
 ## usage
 usage() {
@@ -97,7 +156,7 @@ verify)
   cat <<EOF
 Show info for the named certificate.
 
-simple-ca verify path-to-certificate-file
+simple-ca [-nox | -t] verify path-to-certificate-file
 
 EOF
   ;;
@@ -106,7 +165,7 @@ self-sign)
   cat <<EOF
 Generate a self-signed certificate for a web server.
 
-simple-ca self-sign [Options] fully.qualified.server.domain.name
+simple-ca [-nox | -t] self-sign [Options] fully.qualified.server.domain.name
 
 Options
   -bits NUMBER : number of bits in the key (default ${opt_bits_default:-none})
@@ -138,7 +197,7 @@ request)
   cat <<EOF
 Generate a request for a signed certificate for a web server.
 
-simple-ca request [Options] fully.qualified.server.domain.name
+simple-ca [ -t | -nox ] request [Options] fully.qualified.server.domain.name
 
 Options
   -bits NUMBER : number of bits in the key (default ${opt_bits_default:-none})
@@ -172,7 +231,7 @@ Generate trusted certificates for a web server, using the configured
 Certificate Authority, or generating one on the fly, so that a trusted
 server certificate chain can be created.
 
-simple-ca trust [Options] fully.qualified.server.domain.name
+simple-ca [ -t | -nox ] trust [Options] fully.qualified.server.domain.name
 
 If a root Certificate Authority is found in $SSLCADIR, and an
 intermediate Certificate Authority is found, then those will be
@@ -208,7 +267,9 @@ Options
   -department DEPARTMENT : department handling certs.
       default is ${opt_department_default:-none}.
       aliases are -section, -unit
-  -email EMAIL : contact email
+  -email EMAIL : contact email.
+  -ip IP-NUMBER : an alternate name for the server.
+  -reset : if the common name has already been defined, delete it from the database.
 EOF
   ;;
 
@@ -216,7 +277,7 @@ create)
   cat <<EOF
 Create a Certificate Authority for generating free https certificates
 
-simple-ca create [Options] [ IntermediateDirectory [ IntermediateCommonName ] ]
+simple-ca [ -t | -nox ] create [Options] [ IntermediateDirectory [ IntermediateCommonName ] ]
 
 This creates the self-signed root certificate, and an intermediate
 certificate.  The expiry on those certificates will be 20 years.
@@ -232,7 +293,7 @@ IntermediateDirectory
 
 IntermediateCommonName
   Optional common name for the Intermediate Certificate Authority.
-  default is ${{opt_intermediate_common_name_default:-none}.
+  default is ${opt_intermediate_common_name_default:-none}.
 
 Options
   -new : create CA as new.  if CA exists, scrub it.
@@ -247,17 +308,17 @@ Options
   -withpassword : encrypt the private keys, with ${opt_private_key_cipher_default_if:-none} cipher.
       aliases : -password, -encrypt-private-key
   -country COUNTRY : two letter ISO code for certificate authority country.
-      default is $opt_country_default:-none}.
+      default is ${opt_country_default:-none}.
   -province PROVINCE : province name for certificate authority.
-      default is $opt_province_default:-none}.
+      default is ${opt_province_default:-none}.
       alias : -state
   -city CITY : city for certificate authority.
-      default is $opt_city_default:-none}.
+      default is ${opt_city_default:-none}.
   -company COMPANY : name of certificate authority.
-      default is $opt_company_default:-none}.
+      default is ${opt_company_default:-none}.
       alias : -organization
   -department DEPARTMENT : department handling certs.
-      default is $opt_department_default:-none}.
+      default is ${opt_department_default:-none}.
       aliases are -section, -unit
   -email EMAIL : contact email
 EOF
@@ -267,7 +328,11 @@ EOF
   cat <<EOF
 Generate SSL certificates.
 
-simple-ca COMMAND [ Options ] [ Arguments ]
+simple-ca [ -nox | -x | -t ] COMMAND [ Options ] [ Arguments ]
+
+-x (default) execute shell commands, don't echo.
+-nox don't execute shell commands, just echo.
+-t trace (echo) shell commands and execute them.
 
 COMMAND may be
 
@@ -287,9 +352,24 @@ esac
 
 ###############
 ## main
+TMP=/tmp/simple-ca-$$
+trap cleanup_sh EXIT
 
 #######################################
 ## parse command line
+while [ $# -gt 0 ]
+do
+  case "$1" in
+  -x|-execute) ECHO=; shift ;;
+  -t|-trace) ECHO=trace; shift ;;
+  -nox|-noexecute) ECHO=echo; shift ;;
+  --) shift; break ;;
+  '-?') usage -exit 0 Help ;;
+  -*) usage -exit 1 "Invalid option $1" >&2 ;;
+  *) break ;;
+  esac
+done
+
 case "$1" in
 self-sign) COMMAND=self-sign; shift ;;
 create) COMMAND=create; shift ;;
@@ -300,6 +380,9 @@ help) COMMAND=$2; usage -exit 0 "Help" ;;
 *) usage -exit 1 "Invalid command $1" >&2 ;;
 esac
 
+##
+## parse command options
+##
 while [ $# -gt 0 ]
 do
   case "$1" in
@@ -317,6 +400,8 @@ do
   -city) opt_city=$2; shift; shift ;;
   -company|-organization) opt_company=$2; shift; shift ;;
   -department|-section|-unit) opt_department=$2; shift; shift ;;
+  -san_ip|-ip) san_ip=$2; shift; shift ;;
+  -reset) reset_server_certificate=yes; shift ;;
   -email) opt_email=$2; shift; shift ;;
   --) shift; break ;;
   '-?') usage -exit 0 Help ;;
@@ -427,19 +512,25 @@ stagenum=0
 ## execute
 case "$COMMAND" in
 self-sign)
+  echo ""
+  echo "Generate a self-signed certificate"
+
+  keyfile="${SSLDIR}/${SSLFILE}.key.pem"
+  [ -e "$keyfile" -a ! -w "$keyfile" ] && runshcmd chmod u+w "$keyfile"
+
   if [ ".$opt_private_key_cipher" = . ]; then
     (( stagenum = stagenum + 1 ))
     echo ""
     echo "$stagenum) Generate $opt_bits bit private key (unencrypted)"
-    $ECHO openssl genrsa -out "${SSLDIR}/${SSLFILE}.key.pem" $opt_bits
+    runshcmd openssl genrsa -out "$keyfile" $opt_bits
   else
     (( stagenum = stagenum + 1 ))
     echo ""
     echo "$stagenum) Generate encrypted $opt_bits bit private key (encryption password will be prompted for)"
-    $ECHO openssl genrsa $opt_private_key_cipher -out "${SSLDIR}/${SSLFILE}.key.pem" $opt_bits
+    runshcmd openssl genrsa $opt_private_key_cipher -out "$keyfile" $opt_bits
   fi
-  $ECHO chmod 440 "${SSLDIR}/${SSLFILE}.key.pem"
-  [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} "${SSLDIR}/${SSLFILE}.key.pem"
+  runshcmd chmod 440 "$keyfile"
+  [ "$APACHE_RUN_GROUP" ] && runshcmd chgrp ${APACHE_RUN_GROUP} "$keyfile"
 
   (( stagenum = stagenum + 1 ))
   echo ""
@@ -453,22 +544,50 @@ self-sign)
   echo "   Email Address                          : $opt_email"
 
   [ ".$opt_private_key_cipher" != . ] && { echo ""; echo "private key password will be prompted for ..."; }
-  $ECHO openssl req -new -key "${SSLDIR}/${SSLFILE}.key.pem" -out "${SSLDIR}/${SSLFILE}.csr.pem" -days $opt_days -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_fqdn/emailAddress=$opt_email"
+    {
+      sed -e 's/^  *//' <<EOF
+        [req]
+        default_bits = 2048
+        prompt = no
+        default_md = sha256
+        req_extensions = SAN
+        distinguished_name = dn
+
+        [ dn ]
+        C=$opt_country
+        ST=$opt_province
+        L=$opt_city
+        O=$opt_company
+        OU=$opt_department
+        emailAddress=$opt_email
+        CN=$opt_fqdn
+
+        [ SAN ]
+        subjectAltName = @alt_names
+
+        [ alt_names ]
+        DNS.1   = $opt_fqdn
+        email.2 = copy
+EOF
+      [ -n "$san_ip" ] && echo "IP.3    = $san_ip"
+    } > "${TMP}_selfsigned"
+
+  runshcmd openssl req -new -sha256 -key "${SSLDIR}/${SSLFILE}.key.pem" -out "${SSLDIR}/${SSLFILE}.csr.pem" -days $opt_days -config "${TMP}_selfsigned"
 
   (( stagenum = stagenum + 1 ))
   echo ""
   echo "$stagenum) generate self signed ssl certificate for $opt_days days"
-  $ECHO openssl x509 -req -days $opt_days -in "${SSLDIR}/${SSLFILE}.csr.pem" -signkey "${SSLDIR}/${SSLFILE}.key.pem" -out "${SSLDIR}/${SSLFILE}.cert.pem"
-  $ECHO chmod 444 "${SSLDIR}/${SSLFILE}.cert.pem"
+  runshcmd openssl x509 -req -days $opt_days -in "${SSLDIR}/${SSLFILE}.csr.pem" -signkey "${SSLDIR}/${SSLFILE}.key.pem" -out "${SSLDIR}/${SSLFILE}.cert.pem"
+  runshcmd chmod 444 "${SSLDIR}/${SSLFILE}.cert.pem"
 
   (( stagenum = stagenum + 1 ))
   echo ""
   echo "$stagenum) verify certificate"
-  $ECHO openssl x509 -noout -text -in "${SSLDIR}/${SSLFILE}.cert.pem"
+  runshcmd openssl x509 -noout -text -in "${SSLDIR}/${SSLFILE}.cert.pem"
 
   echo ""
-  [ -f "${SSLDIR}/${SSLFILE}.orig.key.pem" ] && { echo removing "${SSLDIR}/${SSLFILE}.orig.key.pem"; $ECHO rm "${SSLDIR}/${SSLFILE}.orig.key.pem"; }
-  [ -f "${SSLDIR}/${SSLFILE}.csr.pem" ] && { echo removing "${SSLDIR}/${SSLFILE}.csr.pem"; $ECHO rm "${SSLDIR}/${SSLFILE}.csr.pem"; }
+  [ -f "${SSLDIR}/${SSLFILE}.orig.key.pem" ] && { echo removing "${SSLDIR}/${SSLFILE}.orig.key.pem"; runshcmd rm "${SSLDIR}/${SSLFILE}.orig.key.pem"; }
+  [ -f "${SSLDIR}/${SSLFILE}.csr.pem" ] && { echo removing "${SSLDIR}/${SSLFILE}.csr.pem"; runshcmd rm "${SSLDIR}/${SSLFILE}.csr.pem"; }
 
   echo ""
   echo "self-signed private key ${SSLDIR}/${SSLFILE}.key.pem"
@@ -478,24 +597,34 @@ self-sign)
   ;;
 
 verify)
-  $ECHO openssl x509 -noout -text -in "$opt_certificate_signing_request_file"
+  echo ""
+  echo "Verifying a certificate ..."
+  echo ""
+
+  runshcmd openssl x509 -noout -text -in "$opt_certificate_signing_request_file"
   exit $?
   ;;
 
 request)
+  echo ""
+  echo "Generating a request for a (Real) Certificate Authority to sign"
+
+  keyfile="${SSLDIR}/${opt_fqdn}.key.pem"
+  [ -e "$keyfile" -a ! -w "$keyfile" ] && runshcmd chmod u+w "$keyfile"
+
   if [ ".$opt_private_key_cipher" = . ]; then
     (( stagenum = stagenum + 1 ))
     echo ""
     echo "$stagenum) Generate $opt_bits bit private key (unencrypted)"
-    $ECHO openssl genrsa -out "${SSLDIR}/${opt_fqdn}.key.pem" $opt_bits
+    runshcmd openssl genrsa -out "$keyfile" $opt_bits
   else
     (( stagenum = stagenum + 1 ))
     echo ""
     echo "$stagenum) Generate encrypted $opt_bits bit private key (encryption password will be prompted for)"
-    $ECHO openssl genrsa $opt_private_key_cipher -out "${SSLDIR}/${opt_fqdn}.key.pem" $opt_bits
+    runshcmd openssl genrsa $opt_private_key_cipher -out "$keyfile" $opt_bits
   fi
-  $ECHO chmod 440 "${SSLDIR}/${opt_fqdn}.key.pem"
-  [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} "${SSLDIR}/${opt_fqdn}.key.pem"
+  runshcmd chmod 440 "$keyfile"
+  [ "$APACHE_RUN_GROUP" ] && runshcmd chgrp ${APACHE_RUN_GROUP} "$keyfile"
 
   (( stagenum = stagenum + 1 ))
   echo ""
@@ -509,7 +638,7 @@ request)
   echo "   Email Address                          : $opt_email"
 
   [ ".$opt_private_key_cipher" != . ] && { echo ""; echo "$opt_fqdn private key password will be prompted for ..."; }
-  $ECHO openssl req -key "${SSLDIR}/${opt_fqdn}.key.pem" -new -sha256 -out "${SSLDIR}/${opt_fqdn}.csr.pem" -days $opt_days -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_fqdn/emailAddress=$opt_email"
+  runshcmd openssl req -key "${SSLDIR}/${opt_fqdn}.key.pem" -new -sha256 -out "${SSLDIR}/${opt_fqdn}.csr.pem" -days $opt_days -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_fqdn/emailAddress=$opt_email/subjectAltName=DNS:$opt_fqdn,email:copy"
 
   echo ""
   echo "private key ${SSLDIR}/${opt_fqdn}.key.pem"
@@ -529,6 +658,9 @@ trust|create)
 esac
 
 if [ -n "$newcaflag" -o -n "$opt_scrub_root_ca" ]; then
+  echo ""
+  echo "Generating a Certificate Authority in $SSLCADIR"
+
   pushd "$SSLCADIR" > /dev/null
 
   chmod 700 private
@@ -669,19 +801,22 @@ if [ -n "$newcaflag" -o -n "$opt_scrub_root_ca" ]; then
     extendedKeyUsage = critical, OCSPSigning
 EOF
 
+  keyfile="private/${SSLCAFILE}.key.pem"
+  [ -e "$keyfile" -a ! -w "$keyfile" ] && runshcmd chmod u+w "$keyfile"
+
   if [ ".$opt_private_key_cipher" = . ]; then
     (( stagenum = stagenum + 1 ))
     echo ""
     echo "$stagenum) Generate $opt_ca_bits bit root certificate authority private key (unencrypted)"
-    $ECHO openssl genrsa -out "private/${SSLCAFILE}.key.pem" $opt_ca_bits
+    runshcmd openssl genrsa -out "$keyfile" $opt_ca_bits
   else
     (( stagenum = stagenum + 1 ))
     echo ""
     echo "$stagenum) Generate encrypted $opt_ca_bits bit root certificate authority private key (encryption password will be prompted for)"
-    $ECHO openssl genrsa $opt_private_key_cipher -out "private/${SSLCAFILE}.key.pem" $opt_ca_bits
+    runshcmd openssl genrsa $opt_private_key_cipher -out "$keyfile" $opt_ca_bits
   fi
-  $ECHO chmod 440 "private/${SSLCAFILE}.key.pem"
-  [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} "private/${SSLCAFILE}.key.pem"
+  runshcmd chmod 440 "$keyfile"
+  [ "$APACHE_RUN_GROUP" ] && runshcmd chgrp ${APACHE_RUN_GROUP} "$keyfile"
 
   (( stagenum = stagenum + 1 ))
   echo ""
@@ -695,13 +830,13 @@ EOF
   echo "   Email Address                          : $opt_email"
 
   [ ".$opt_private_key_cipher" != . ] && { echo ""; echo "the root certificate private key password will be prompted for ..."; }
-  $ECHO openssl req -config openssl.cnf -key "private/${SSLCAFILE}.key.pem" -new -x509 -days $twenty_years_of_days -sha256 -extensions v3_ca -out "certs/${SSLCAFILE}.cert.pem" -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_root_common_name/emailAddress=$opt_email"
-  $ECHO chmod 444 "certs/${SSLCAFILE}.cert.pem"
+  runshcmd openssl req -config openssl.cnf -key "private/${SSLCAFILE}.key.pem" -new -x509 -days $twenty_years_of_days -sha256 -extensions v3_ca -out "certs/${SSLCAFILE}.cert.pem" -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_root_common_name/emailAddress=$opt_email"
+  runshcmd chmod 444 "certs/${SSLCAFILE}.cert.pem"
 
   (( stagenum = stagenum + 1 ))
   echo ""
   echo "$stagenum) verify root certificate"
-  $ECHO openssl x509 -noout -text -in "certs/${SSLCAFILE}.cert.pem"
+  runshcmd openssl x509 -noout -text -in "certs/${SSLCAFILE}.cert.pem"
 
   created_root_ca=yes
 
@@ -719,6 +854,9 @@ do
 done
 
 if [ -n "$newintcaflag" -o -n "$opt_scrub_intermediate_ca" ]; then
+  echo ""
+  echo "Generating an Cartificate Authority Intermediate"
+
   (( stagenum = stagenum + 1 ))
   echo ""
   echo "$stagenum) generate Intermediate CA certificate"
@@ -864,19 +1002,22 @@ if [ -n "$newintcaflag" -o -n "$opt_scrub_intermediate_ca" ]; then
     extendedKeyUsage = critical, OCSPSigning
 EOF
 
+  keyfile=private/intermediate.key.pem
+  [ -e "$keyfile" -a ! -w "$keyfile" ] && runshcmd chmod u+w "$keyfile"
+
   if [ ".$opt_private_key_cipher" = . ]; then
     (( stagenum = stagenum + 1 ))
     echo ""
     echo "$stagenum) generate $opt_ca_bits intermediate certificate private key for the certificate authority"
-    $ECHO openssl genrsa -out private/intermediate.key.pem $opt_ca_bits
+    runshcmd openssl genrsa -out "$keyfile" $opt_ca_bits
   else
     (( stagenum = stagenum + 1 ))
     echo ""
     echo "$stagenum) Generate encrypted $opt_ca_bits bit intermediate certificate private key (a new encryption password will be prompted for)"
-    $ECHO openssl genrsa $opt_private_key_cipher -out private/intermediate.key.pem $opt_ca_bits
+    runshcmd openssl genrsa $opt_private_key_cipher -out "$keyfile" $opt_ca_bits
   fi
-  $ECHO chmod 440 private/intermediate.key.pem
-  [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} private/intermediate.key.pem
+  runshcmd chmod 440 "$keyfile"
+  [ "$APACHE_RUN_GROUP" ] && runshcmd chgrp ${APACHE_RUN_GROUP} "$keyfile"
 
   (( stagenum = stagenum + 1 ))
   echo ""
@@ -891,53 +1032,75 @@ EOF
 
   popd > /dev/null
 
-  $ECHO openssl req -config openssl.cnf -new -sha256 -key "$opt_intermediate_dir/private/intermediate.key.pem" -out "$opt_intermediate_dir/csr/intermediate.csr.pem" -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_intermediate_common_name/emailAddress=$opt_email"
+  runshcmd openssl req -config openssl.cnf -new -sha256 -key "$opt_intermediate_dir/private/intermediate.key.pem" -out "$opt_intermediate_dir/csr/intermediate.csr.pem" -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_intermediate_common_name/emailAddress=$opt_email"
+
+  certfile="$opt_intermediate_dir/certs/intermediate.cert.pem"
+  [ -e "$certfile" -a ! -w "$certfile" ] && runshcmd chmod u+w "$certfile"
 
   (( stagenum = stagenum + 1 ))
   echo ""
   echo "$stagenum) generate intermediate certificate signed by the root certificate authority"
   [ ".$opt_private_key_cipher" != . ] && { echo ""; echo "the root certificate private key password will be prompted for ..."; }
-  $ECHO openssl ca -config openssl.cnf -extensions v3_intermediate_ca -days $twenty_years_of_days -notext -md sha256 -in "$opt_intermediate_dir/csr/intermediate.csr.pem" -out "$opt_intermediate_dir/certs/intermediate.cert.pem"
-  $ECHO chmod 444 "$opt_intermediate_dir/certs/intermediate.cert.pem"
+  runshcmd openssl ca -config openssl.cnf -extensions v3_intermediate_ca -days $twenty_years_of_days -notext -md sha256 -in "$opt_intermediate_dir/csr/intermediate.csr.pem" -out "$certfile"
+  runshcmd chmod 444 "$certfile"
 
   (( stagenum = stagenum + 1 ))
   echo ""
   echo "$stagenum) verify intermediate certificate"
-  $ECHO openssl x509 -noout -text -in "$opt_intermediate_dir/certs/intermediate.cert.pem"
+  runshcmd openssl x509 -noout -text -in "$certfile"
 
   (( stagenum = stagenum + 1 ))
   echo ""
   echo "$stagenum) create the certificate chain"
-  cat "$opt_intermediate_dir/certs/intermediate.cert.pem" "certs/${SSLCAFILE}.cert.pem" > "$opt_intermediate_dir/certs/ca-chain.cert.pem"
-  $ECHO chmod 444 "$opt_intermediate_dir/certs/ca-chain.cert.pem"
+  cat "$certfile" "certs/${SSLCAFILE}.cert.pem" > "$opt_intermediate_dir/certs/ca-chain.cert.pem"
+  runshcmd chmod 444 "$opt_intermediate_dir/certs/ca-chain.cert.pem"
 
   echo ""
-  [ -f "$opt_intermediate_dir/private/${SSLCAFILE}.orig.key.pem" ] && { echo removing "$opt_intermediate_dir/private/${SSLCAFILE}.orig.key.pem"; $ECHO rm "$opt_intermediate_dir/private/${SSLCAFILE}.orig.key.pem"; }
-  [ -f "$opt_intermediate_dir/csr/intermediate.csr.pem" ] && { echo removing $opt_intermediate_dir/csr/intermediate.csr.pem; $ECHO rm "$opt_intermediate_dir/csr/intermediate.csr.pem"; }
+  [ -f "$opt_intermediate_dir/private/${SSLCAFILE}.orig.key.pem" ] && { echo removing "$opt_intermediate_dir/private/${SSLCAFILE}.orig.key.pem"; runshcmd rm "$opt_intermediate_dir/private/${SSLCAFILE}.orig.key.pem"; }
+  [ -f "$opt_intermediate_dir/csr/intermediate.csr.pem" ] && { echo removing $opt_intermediate_dir/csr/intermediate.csr.pem; runshcmd rm "$opt_intermediate_dir/csr/intermediate.csr.pem"; }
 
   created_intermediate_ca=yes
 fi
 popd > /dev/null
 
 if [ ".$COMMAND" = .trust ]; then
+  echo ""
+  echo "Generate a trusted server certificate for $opt_fqdn"
+
   pushd "$SSLCADIR/$opt_intermediate_dir" > /dev/null
 
+  if [ -f index.txt ]; then
+    if grep -q "$opt_fqdn" index.txt; then
+      if [ ".$reset_server_certificate" = .yes ]; then
+        echo "$opt_fqdn certificate has already been built - reset specified, removing from database"
+        runshcmd sed -e "/$opt_fqdn/d" < index.txt > "${TMP}_updated_index"
+        runshcmd cp "${TMP}_updated_index" index.txt
+      else
+        echo "$opt_fqdn certificate has already been built - reset was not specified, cannot replace the certificate"
+        exit 1
+      fi
+    fi
+  fi
+
   if [ "$opt_certificate_signing_request_file" ]; then
-    $ECHO cp "$opt_certificate_signing_request_file" "csr/${opt_fqdn}.csr.pem"
+    runshcmd cp "$opt_certificate_signing_request_file" "csr/${opt_fqdn}.csr.pem"
   else
+    keyfile="private/${opt_fqdn}.key.pem"
+    [ -e "$keyfile" -a ! -w "$keyfile" ] && runshcmd chmod u+w "$keyfile"
+
     if [ ".$opt_private_key_cipher" = . ]; then
       (( stagenum = stagenum + 1 ))
       echo ""
       echo "$stagenum) Generate $opt_bits bit private key (unencrypted)"
-      $ECHO openssl genrsa -out "private/${opt_fqdn}.key.pem" $opt_bits
+      runshcmd openssl genrsa -out "$keyfile" $opt_bits
     else
       (( stagenum = stagenum + 1 ))
       echo ""
       echo "$stagenum) Generate encrypted $opt_bits bit private key (encryption password will be prompted for)"
-      $ECHO openssl genrsa $opt_private_key_cipher -out "private/${opt_fqdn}.key.pem" $opt_bits
+      runshcmd openssl genrsa $opt_private_key_cipher -out "$keyfile" $opt_bits
     fi
-    $ECHO chmod 440 "private/${opt_fqdn}.key.pem"
-    [ "$APACHE_RUN_GROUP" ] && $ECHO chgrp ${APACHE_RUN_GROUP} "private/${opt_fqdn}.key.pem"
+    runshcmd chmod 440 "$keyfile"
+    [ "$APACHE_RUN_GROUP" ] && runshcmd chgrp ${APACHE_RUN_GROUP} "$keyfile"
 
     (( stagenum = stagenum + 1 ))
     echo ""
@@ -951,23 +1114,61 @@ if [ ".$COMMAND" = .trust ]; then
     echo "   Email Address                          : $opt_email"
 
     [ ".$opt_private_key_cipher" != . ] && { echo ""; echo "$opt_fqdn private key password will be prompted for ..."; }
-    $ECHO openssl req -config openssl.cnf -key "private/${opt_fqdn}.key.pem" -new -sha256 -out "csr/${opt_fqdn}.csr.pem" -days $opt_days -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_fqdn/emailAddress=$opt_email"
+
+    {
+      cat openssl.cnf
+
+      sed -e 's/^  *//' <<EOF
+        [ SAN ]
+        subjectAltName = @alt_names
+
+        [ alt_names ]
+        DNS.1   = $opt_fqdn
+        email.2 = copy
+EOF
+      [ -n "$san_ip" ] && echo "IP.3    = $san_ip"
+    } > ${TMP}_req_extensions.cnf
+
+    runshcmd openssl req -key "private/${opt_fqdn}.key.pem" -new -sha256 -out "csr/${opt_fqdn}.csr.pem" -days $opt_days -subj "/C=$opt_country/ST=$opt_province/L=$opt_city/O=$opt_company/OU=$opt_department/CN=$opt_fqdn/emailAddress=$opt_email" -reqexts SAN -config ${TMP}_req_extensions.cnf
   fi
+
+  certfile="certs/${opt_fqdn}.cert.pem" 
+  [ -e "$certfile" -a ! -w "$certfile" ] && runshcmd chmod u+w "$certfile"
+
+  {
+    sed -e 's/^  *//' <<EOF
+      # Extensions for server certificates ('man x509v3_config').
+      [ SAN ]
+      nsCertType = server
+      subjectAltName = @salt_names
+      basicConstraints = CA:FALSE
+      nsComment = "OpenSSL Generated Server Certificate"
+      subjectKeyIdentifier = hash
+      authorityKeyIdentifier = keyid,issuer:always
+      keyUsage = critical, digitalSignature, keyEncipherment
+      extendedKeyUsage = serverAuth
+
+      [ salt_names ]
+      DNS.1   = $opt_fqdn
+      email.2 = copy
+EOF
+    [ -n "$san_ip" ] && echo "IP.3    = $san_ip"
+  } > "${TMP}_ca_server_extfile"
 
   (( stagenum = stagenum + 1 ))
   echo ""
   echo "$stagenum) generate CA signed ssl certificate for $opt_days days"
-  $ECHO openssl ca -config openssl.cnf -extensions server_cert -days $opt_days -notext -md sha256 -in "csr/${opt_fqdn}.csr.pem" -out "certs/${opt_fqdn}.cert.pem" 
-  $ECHO chmod 444 "certs/${opt_fqdn}.cert.pem" 
+  runshcmd openssl ca -config openssl.cnf -extensions SAN -extfile "${TMP}_ca_server_extfile" -days $opt_days -notext -md sha256 -in "csr/${opt_fqdn}.csr.pem" -out "$certfile"
+  runshcmd chmod 444 "$certfile" 
 
   (( stagenum = stagenum + 1 ))
   echo ""
   echo "$stagenum) verify web server certificate"
-  $ECHO openssl x509 -noout -text -in "certs/${opt_fqdn}.cert.pem"
+  runshcmd openssl x509 -noout -text -in "$certfile"
 
   echo ""
-  [ -f "private/${opt_fqdn}.orig.key.pem" ] && { echo removing "private/${opt_fqdn}.orig.key.pem"; $ECHO rm "private/${opt_fqdn}.orig.key.pem"; }
-  [ -f "csr/${opt_fqdn}.csr.pem" ] && { echo removing "csr/${opt_fqdn}.csr.pem"; $ECHO rm "csr/${opt_fqdn}.csr.pem"; }
+  [ -f "private/${opt_fqdn}.orig.key.pem" ] && { echo removing "private/${opt_fqdn}.orig.key.pem"; runshcmd rm "private/${opt_fqdn}.orig.key.pem"; }
+  [ -f "csr/${opt_fqdn}.csr.pem" ] && { echo removing "csr/${opt_fqdn}.csr.pem"; runshcmd rm "csr/${opt_fqdn}.csr.pem"; }
 
   popd > /dev/null
 
