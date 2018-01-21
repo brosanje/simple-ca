@@ -1,0 +1,2 @@
+2018/01/21
+  v1.0 Added LICENSE file and other bookkeeping files.

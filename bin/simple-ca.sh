@@ -152,17 +152,38 @@ usage() {
   [ -n "$message" ] && echo "$message"
 
 case "$COMMAND" in
-verify)
+[Hh]elp|all)
   cat <<EOF
-Show info for the named certificate.
 
-simple-ca [-nox | -t] verify path-to-certificate-file
+Generate SSL certificates.
+
+simple-ca [ -nox | -x | -t ] COMMAND [ Options ] [ Arguments ]
+
+  -x (default) execute shell commands, don't echo.
+  -nox don't execute shell commands, just echo.
+  -t trace (echo) shell commands and execute them.
+
+COMMAND may be
+
+  self-sign - generate a self-signed certificate, with corresponding private key.
+  create - create a certificate authority for signing server certs.
+  trust - generate the trusted server certificate.
+  request - generate a CSR certificate signing request.
+  verify - display info on a named certificate.
+  help - show help
 
 EOF
   ;;
+esac
 
-self-sign)
+case "$COMMAND" in
+all) echo -e '\n========================================================' ;;
+esac
+
+case "$COMMAND" in
+self-sign|all)
   cat <<EOF
+
 Generate a self-signed certificate for a web server.
 
 simple-ca [-nox | -t] self-sign [Options] fully.qualified.server.domain.name
@@ -192,89 +213,16 @@ Options
   -email EMAIL : contact email
 EOF
   ;;
+esac
 
-request)
+case "$COMMAND" in
+all) echo -e '\n========================================================' ;;
+esac
+
+case "$COMMAND" in
+create|all)
   cat <<EOF
-Generate a request for a signed certificate for a web server.
 
-simple-ca [ -t | -nox ] request [Options] fully.qualified.server.domain.name
-
-Options
-  -bits NUMBER : number of bits in the key (default ${opt_bits_default:-none})
-  -days NUMBER : number of days to certificate expiry (default ${opt_days_default:-none})
-  -aes128 -aes192 -aes256 -camellia128 -camellia192 -camellia256
-      -des -des3 -idea : type of encryption to use for the private keys.
-      default is no encryption, no password.
-  -nopassword : no password on the private keys.  this is the default.
-  -withpassword : encrypt the private keys, with ${opt_private_key_cipher_default_if:-none} cipher.
-      aliases : -password, -encrypt-private-key
-  -country COUNTRY : two letter ISO code for certificate authority country.
-      default is ${opt_country_default:-none}.
-  -province PROVINCE : province name for certificate authority.
-      default is ${opt_province_default:-none}.
-      alias : -state
-  -city CITY : city for certificate authority.
-      default is ${opt_city_default:-none}.
-  -company COMPANY : name of certificate authority.
-      default is ${opt_company_default:-none}.
-      alias : -organization
-  -department DEPARTMENT : department handling certs.
-      default is ${opt_department_default:-none}.
-      aliases are -section, -unit
-  -email EMAIL : contact email
-EOF
-  ;;
-
-trust)
-  cat <<EOF
-Generate trusted certificates for a web server, using the configured
-Certificate Authority, or generating one on the fly, so that a trusted
-server certificate chain can be created.
-
-simple-ca [ -t | -nox ] trust [Options] fully.qualified.server.domain.name
-
-If a root Certificate Authority is found in $SSLCADIR, and an
-intermediate Certificate Authority is found, then those will be
-used to generate the trusted certificate chain.  Otherwise, they
-will be created.
-
-Options
-  -new : create CA as new.  if CA exists, scrub it.
-  -new-intermediate : create Intermediate CA as new.  if it exists, scrub it.
-  -intermediate INTERMEDIATE-DIRECTORY : Intermediate CA to use.
-    Optional name of directory within the CA directory to hold
-    the Intermediate CA data.  default is ${opt_intermediate_dir_default:-none}.
-  -bits NUMBER : number of bits in the key (default ${opt_bits_default:-none})
-  -years NUMBER : default number of years to certificate
-      expiry (default ${opt_years_default:-none})
-  -days NUMBER : number of days to certificate expiry (default ${opt_days_default:-none})
-  -aes128 -aes192 -aes256 -camellia128 -camellia192 -camellia256
-      -des -des3 -idea : type of encryption to use for the private keys.
-      default is no encryption, no password.
-  -nopassword : no password on the private keys.  this is the default.
-  -withpassword : encrypt the private keys, with ${opt_private_key_cipher_default_if:-none} cipher.
-      aliases : -password, -encrypt-private-key
-  -country COUNTRY : two letter ISO code for certificate authority country.
-      default is ${opt_country_default:-none}.
-  -province PROVINCE : province name for certificate authority.
-      default is ${opt_province_default:-none}.
-      alias : -state
-  -city CITY : city for certificate authority.
-      default is ${opt_city_default:-none}.
-  -company COMPANY : name of certificate authority.
-      default is ${opt_company_default:-none}.
-      alias : -organization
-  -department DEPARTMENT : department handling certs.
-      default is ${opt_department_default:-none}.
-      aliases are -section, -unit
-  -email EMAIL : contact email.
-  -ip IP-NUMBER : an alternate name for the server.
-  -reset : if the common name has already been defined, delete it from the database.
-EOF
-  ;;
-
-create)
-  cat <<EOF
 Create a Certificate Authority for generating free https certificates
 
 simple-ca [ -t | -nox ] create [Options] [ IntermediateDirectory [ IntermediateCommonName ] ]
@@ -323,25 +271,113 @@ Options
   -email EMAIL : contact email
 EOF
   ;;
-  
-*)
+esac
+
+case "$COMMAND" in
+all) echo -e '\n========================================================' ;;
+esac
+
+case "$COMMAND" in
+trust|all)
   cat <<EOF
-Generate SSL certificates.
 
-simple-ca [ -nox | -x | -t ] COMMAND [ Options ] [ Arguments ]
+Generate trusted certificates for a web server, using the configured
+Certificate Authority, or generating one on the fly, so that a trusted
+server certificate chain can be created.
 
--x (default) execute shell commands, don't echo.
--nox don't execute shell commands, just echo.
--t trace (echo) shell commands and execute them.
+simple-ca [ -t | -nox ] trust [Options] fully.qualified.server.domain.name
 
-COMMAND may be
+If a root Certificate Authority is found in $SSLCADIR, and an
+intermediate Certificate Authority is found, then those will be
+used to generate the trusted certificate chain.  Otherwise, they
+will be created.
 
-  self-sign - generate a self-signed certificate, with corresponding private key.
-  create - create a certificate authority for signing server certs.
-  trust - generate the trusted server certificate.
-  verify - display info on a named certificate.
-  request - generate a CSR certificate signing request.
-  help - show help
+Options
+  -new : create CA as new.  if CA exists, scrub it.
+  -new-intermediate : create Intermediate CA as new.  if it exists, scrub it.
+  -intermediate INTERMEDIATE-DIRECTORY : Intermediate CA to use.
+    Optional name of directory within the CA directory to hold
+    the Intermediate CA data.  default is ${opt_intermediate_dir_default:-none}.
+  -bits NUMBER : number of bits in the key (default ${opt_bits_default:-none})
+  -years NUMBER : default number of years to certificate
+      expiry (default ${opt_years_default:-none})
+  -days NUMBER : number of days to certificate expiry (default ${opt_days_default:-none})
+  -aes128 -aes192 -aes256 -camellia128 -camellia192 -camellia256
+      -des -des3 -idea : type of encryption to use for the private keys.
+      default is no encryption, no password.
+  -nopassword : no password on the private keys.  this is the default.
+  -withpassword : encrypt the private keys, with ${opt_private_key_cipher_default_if:-none} cipher.
+      aliases : -password, -encrypt-private-key
+  -country COUNTRY : two letter ISO code for certificate authority country.
+      default is ${opt_country_default:-none}.
+  -province PROVINCE : province name for certificate authority.
+      default is ${opt_province_default:-none}.
+      alias : -state
+  -city CITY : city for certificate authority.
+      default is ${opt_city_default:-none}.
+  -company COMPANY : name of certificate authority.
+      default is ${opt_company_default:-none}.
+      alias : -organization
+  -department DEPARTMENT : department handling certs.
+      default is ${opt_department_default:-none}.
+      aliases are -section, -unit
+  -email EMAIL : contact email.
+  -ip IP-NUMBER : an alternate name for the server.
+  -reset : if the common name has already been defined, delete it from the database.
+EOF
+  ;;
+esac
+
+case "$COMMAND" in
+all) echo -e '\n========================================================' ;;
+esac
+
+case "$COMMAND" in
+request|all)
+  cat <<EOF
+
+Generate a request for a signed certificate for a web server.
+
+simple-ca [ -t | -nox ] request [Options] fully.qualified.server.domain.name
+
+Options
+  -bits NUMBER : number of bits in the key (default ${opt_bits_default:-none})
+  -days NUMBER : number of days to certificate expiry (default ${opt_days_default:-none})
+  -aes128 -aes192 -aes256 -camellia128 -camellia192 -camellia256
+      -des -des3 -idea : type of encryption to use for the private keys.
+      default is no encryption, no password.
+  -nopassword : no password on the private keys.  this is the default.
+  -withpassword : encrypt the private keys, with ${opt_private_key_cipher_default_if:-none} cipher.
+      aliases : -password, -encrypt-private-key
+  -country COUNTRY : two letter ISO code for certificate authority country.
+      default is ${opt_country_default:-none}.
+  -province PROVINCE : province name for certificate authority.
+      default is ${opt_province_default:-none}.
+      alias : -state
+  -city CITY : city for certificate authority.
+      default is ${opt_city_default:-none}.
+  -company COMPANY : name of certificate authority.
+      default is ${opt_company_default:-none}.
+      alias : -organization
+  -department DEPARTMENT : department handling certs.
+      default is ${opt_department_default:-none}.
+      aliases are -section, -unit
+  -email EMAIL : contact email
+EOF
+  ;;
+esac
+
+case "$COMMAND" in
+all) echo -e '\n========================================================' ;;
+esac
+
+case "$COMMAND" in
+verify|all)
+  cat <<EOF
+
+Show info for the named certificate.
+
+simple-ca [-nox | -t] verify path-to-certificate-file
 
 EOF
   ;;
@@ -376,7 +412,7 @@ create) COMMAND=create; shift ;;
 trust) COMMAND=trust; shift ;;
 request) COMMAND=request; shift ;;
 verify) COMMAND=verify; shift ;;
-help) COMMAND=$2; usage -exit 0 "Help" ;;
+help) COMMAND=${2:-help}; usage -exit 0 "Help" ;;
 *) usage -exit 1 "Invalid command $1" >&2 ;;
 esac
 
