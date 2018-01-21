@@ -10,6 +10,26 @@ A shell script implementing a simple certificate authority, with the ability to
 * generate requests, a CSR certificate signing request you can send to a real certificate authority.
 * show what's in a certificate.
 
+## Examples - [Make it Go](https://www.youtube.com/watch?v=-WmGvYDLsj4)
+
+* simple-ca help all
+
+  All the help you need.
+
+* simple-ca -t trust goulash-love.ofallthings.com
+
+  * Create a certificate authority, if not already there.  Create a CA trusted certificate
+  for goulash-love.ofallthings.com.  A "ssl" subdirectory will be created if not already
+  created.
+
+  * List off all the openssl commands used in the creation of these things.
+
+  * At the end of it all, list the important files created, and their locations.
+
+    * The certificate
+    * The private key
+    * The certificate chain
+
 ## Guides
 
 Helpful sources.
